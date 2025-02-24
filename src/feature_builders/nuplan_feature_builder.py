@@ -28,8 +28,8 @@ from nuplan.planning.training.preprocessing.features.abstract_model_feature impo
 from ..features.nuplan_feature import NuplanFeature
 from .common.route_utils import route_roadblock_correction
 from .common.utils import interpolate_polyline, rotate_round_z_axis
-
-
+# NOTE 从nuplan的db文件中提取所需要的训练数据
+# NOTE 自车位置是后轴中心的位置
 class NuplanFeatureBuilder(AbstractFeatureBuilder):
     def __init__(
         self,

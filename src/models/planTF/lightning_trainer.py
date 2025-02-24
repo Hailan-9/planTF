@@ -33,7 +33,7 @@ class LightningTrainer(pl.LightningModule):
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
-
+        # 创建的运动规划模型
         self.model = model
         self.lr = lr
         self.weight_decay = weight_decay
@@ -75,7 +75,7 @@ class LightningTrainer(pl.LightningModule):
         )
         targets = data["agent"]["target"]
         valid_mask = data["agent"]["valid_mask"][:, :, -trajectory.shape[-2] :]
-
+        # shape is (bt, ego(1)+agents, timesteps, dim) dim: x y heading
         ego_target_pos, ego_target_heading = targets[:, 0, :, :2], targets[:, 0, :, 2]
         ego_target = torch.cat(
             [
@@ -87,13 +87,21 @@ class LightningTrainer(pl.LightningModule):
             dim=-1,
         )
         agent_target, agent_mask = targets[:, 1:], valid_mask[:, 1:]
-
+        # 解码出来的所有的自车轨迹中，最接近ego_gt的轨迹，需要给其最高的概率
+        # trajectory:(bt, modals, times, dim) ade:(bt, modal, times)
         ade = torch.norm(trajectory[..., :2] - ego_target[:, None, :, :2], dim=-1)
+        # bt, modal-->bt
         best_mode = torch.argmin(ade.sum(-1), dim=-1)
+        # bt modal times dim --> bt times dim
         best_traj = trajectory[torch.arange(trajectory.shape[0]), best_mode]
         ego_reg_loss = F.smooth_l1_loss(best_traj, ego_target)
+        # 在 PyTorch 中，detach() 是一个非常重要的方法，它用于将张量（Tensor）从当前的计算图中分离出来，返回一个新的张量，该张量不会对原始张量的梯度进行跟踪。
+        # 避免梯度回传：
+        # 在 PyTorch 中，F.cross_entropy 的第二个参数（目标类别）应该是整数类型的张量，且不能参与梯度计算。如果直接使用 best_mode，它可能会包含梯度信息（因为它是由 torch.argmin 计算得到的），这会导致错误。
+        # 通过 detach()，best_mode 被从计算图中分离出来，成为一个不参与梯度计算的张量，从而避免了潜在的梯度回传问题。
         ego_cls_loss = F.cross_entropy(probability, best_mode.detach())
-
+        # agent_target[agent_mask]：这一步通过布尔索引选择满足条件的样本。
+        # [:, :2]：这一步对选择后的张量进行切片操作。
         agent_reg_loss = F.smooth_l1_loss(
             prediction[agent_mask], agent_target[agent_mask][:, :2]
         )

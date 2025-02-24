@@ -47,6 +47,7 @@ class PlanningModel(TorchModuleWrapper):
         self.future_steps = future_steps
 
         self.pos_emb = build_mlp(4, [dim] * 2)
+        # 1.代理他车编码器
         self.agent_encoder = AgentEncoder(
             state_channel=state_channel,
             history_channel=history_channel,
@@ -57,7 +58,7 @@ class PlanningModel(TorchModuleWrapper):
             state_attn_encoder=state_attn_encoder,
             state_dropout=state_dropout,
         )
-
+        # 2.地图元素编码器
         self.map_encoder = MapEncoder(
             dim=dim,
             polygon_channel=polygon_channel,
@@ -68,17 +69,18 @@ class PlanningModel(TorchModuleWrapper):
             for dp in [x.item() for x in torch.linspace(0, drop_path, encoder_depth)]
         )
         self.norm = nn.LayerNorm(dim)
-
+        # 自车轨迹解码器
         self.trajectory_decoder = TrajectoryDecoder(
             embed_dim=dim,
             num_modes=num_modes,
             future_steps=future_steps,
             out_channels=4,
         )
+        # 他车轨迹解码器
         self.agent_predictor = build_mlp(dim, [dim * 2, future_steps * 2], norm="ln")
 
         self.apply(self._init_weights)
-
+    # 权重参数初始化
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
@@ -94,6 +96,7 @@ class PlanningModel(TorchModuleWrapper):
             nn.init.normal_(m.weight, mean=0.0, std=0.02)
 
     def forward(self, data):
+        # 信息提取
         agent_pos = data["agent"]["position"][:, :, self.history_steps - 1]
         agent_heading = data["agent"]["heading"][:, :, self.history_steps - 1]
         agent_mask = data["agent"]["valid_mask"][:, :, : self.history_steps]
@@ -107,22 +110,24 @@ class PlanningModel(TorchModuleWrapper):
         pos = torch.cat(
             [position, torch.stack([angle.cos(), angle.sin()], dim=-1)], dim=-1
         )
+        # 位置编码
         pos_embed = self.pos_emb(pos)
-
+        # key_padding即数据填充的掩码，True表示数据是填充的，需要屏蔽注意力的计算
         agent_key_padding = ~(agent_mask.any(-1))
         polygon_key_padding = ~(polygon_mask.any(-1))
         key_padding_mask = torch.cat([agent_key_padding, polygon_key_padding], dim=-1)
-
+        # 自车和他车编码
         x_agent = self.agent_encoder(data)
         x_polygon = self.map_encoder(data)
 
         x = torch.cat([x_agent, x_polygon], dim=1) + pos_embed
-
+        # 编码器的输出
         for blk in self.encoder_blocks:
             x = blk(x, key_padding_mask=key_padding_mask)
         x = self.norm(x)
-
+        # 解码阶段
         trajectory, probability = self.trajectory_decoder(x[:, 0])
+        # bs, agents(neighbors), times, dim
         prediction = self.agent_predictor(x[:, 1:A]).view(bs, -1, self.future_steps, 2)
 
         out = {

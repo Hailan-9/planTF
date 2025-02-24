@@ -11,8 +11,7 @@ from nuplan.planning.training.preprocessing.features.abstract_model_feature impo
 from torch.nn.utils.rnn import pad_sequence
 
 from src.utils.conversion import to_device, to_numpy, to_tensor
-
-
+# NOTE 进行训练处理的最后一步处理，即normalize，也就是将自车和他车和周围环境的状态信息从绝对坐标系转到自车局部坐标系下
 @dataclass
 class NuplanFeature(AbstractModelFeature):
     data: Dict[str, Any]

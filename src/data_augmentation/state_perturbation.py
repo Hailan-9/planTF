@@ -21,7 +21,7 @@ from src.utils.collision_checker import CollisionChecker
 
 
 logger = logging.getLogger(__name__)
-
+# 有点simple的数据增强
 
 class StatePerturbation(AbstractAugmentor):
     """
@@ -51,14 +51,17 @@ class StatePerturbation(AbstractAugmentor):
         :param low: Parameter to set lower bound vector of the Uniform noise on [x, y, yaw]. Used only if use_uniform_noise == True.
         :param high: Parameter to set upper bound vector of the Uniform noise on [x, y, yaw]. Used only if use_uniform_noise == True.
         :param augment_prob: probability between 0 and 1 of applying the data augmentation
+        # 如果为真，则决定使用均匀噪声而不是高斯噪声的参数。
         :param use_uniform_noise: Parameter to decide to use uniform noise instead of gaussian noise if true.
         """
         self._dt = dt
         self._hist_len = hist_len
+        # 定义了均匀噪声的上下界，分别针对状态变量 [x, y, yaw, vel, acc, steer, steer_rate]
         self._random_offset_generator = UniformNoise(low, high)
         self._augment_prob = augment_prob
         self._normalize = normalize
         self._collision_checker = CollisionChecker()
+        # 自车后轴到重心的距离，用于计算位置信息。
         self._rear_to_cog = get_pacifica_parameters().rear_axle_to_center
 
     def safety_check(
@@ -77,9 +80,11 @@ class StatePerturbation(AbstractAugmentor):
             + np.stack([np.cos(ego_heading), np.sin(ego_heading)], axis=-1)
             * self._rear_to_cog
         )
+        # tensor shape (1, 3)
         ego_state = torch.from_numpy(
             np.concatenate([ego_center, [ego_heading]], axis=-1)
         ).unsqueeze(0)
+        # tensor shape is (1, N, T)
         objects_state = torch.from_numpy(
             np.concatenate([agents_position, agents_heading[..., None]], axis=-1)
         ).unsqueeze(0)
