@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 from typing import cast
+import datetime
 
 import pytorch_lightning as pl
 from hydra.utils import instantiate
@@ -39,6 +40,17 @@ from .custom_datamodule import CustomDataModule
 
 logger = logging.getLogger(__name__)
 
+
+# 配置日志  log_path+'train.log
+current_time = datetime.datetime.now()
+formatted_time = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+
+logging.basicConfig(
+    filename=f"./planTF_{formatted_time}_0224_single_train_NN.log",  # 输出日志的文件名  
+    level=logging.DEBUG,   # 设置日志级别为 DEBUG  
+    format='%(asctime)s - %(message)s'  # 日志格式  
+    # format='%(asctime)s - %(filename)s - line:%(lineno)d - %(levelname)s - %(message)s'  
+)
 
 def update_config_for_training(cfg: DictConfig) -> None:
     """
@@ -103,6 +115,10 @@ def build_lightning_datamodule(
     target_builders = model.get_list_of_computed_target()
 
     # Build splitter
+    logging.info(f"cfg.splitter is {cfg.splitter} type is {type(cfg.splitter)}")
+        # 打印所有键  
+    for key in cfg.splitter.keys():  
+        print(key)  
     splitter = build_splitter(cfg.splitter)
 
     # Create feature preprocessor

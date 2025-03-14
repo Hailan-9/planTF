@@ -1,6 +1,7 @@
 import logging
 import random
 from typing import Any, Dict, List, Optional, Tuple
+import datetime
 
 import pytorch_lightning as pl
 import torch
@@ -26,6 +27,17 @@ from nuplan.planning.training.preprocessing.feature_preprocessor import (
     FeaturePreprocessor,
 )
 from nuplan.planning.utils.multithreading.worker_pool import WorkerPool
+
+# 配置日志  log_path+'train.log
+current_time = datetime.datetime.now()
+formatted_time = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+
+logging.basicConfig(
+    filename=f"./planTF_{formatted_time}_0224_single_train_NN.log",  # 输出日志的文件名  
+    level=logging.DEBUG,   # 设置日志级别为 DEBUG  
+    format='%(asctime)s - %(message)s'  # 日志格式  
+    # format='%(asctime)s - %(filename)s - line:%(lineno)d - %(levelname)s - %(message)s'  
+)
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +257,10 @@ class CustomDataModule(pl.LightningDataModule):
             )
         else:
             weighted_sampler = None
-
+        # NOTE 整理数据 使得每次得到批数据的时候，各个特征的尺寸是一样的，一般就是经过填充（也可以设置一个最大个数进行截断）处理。这样就可以成功得到批数据。
+        # NOTE 一般传入cpllate_fc这个参数就是因为每个训练数据中的一些特征的尺寸不一样，所以需要自定义统一处理。
+        # - https://blog.csdn.net/yueguang8/article/details/136308463
+        # - https://blog.csdn.net/qq_43391414/article/details/120462055
         return torch.utils.data.DataLoader(
             dataset=self._train_set,
             shuffle=weighted_sampler is None,
